@@ -188,6 +188,17 @@ Every branch writes to a dedicated Google Sheets log: API Checked, Duplicate, Ve
 
 </div>
 
+# 💼 Business Impact
+
+The platform eliminates repetitive invoice processing tasks and improves accounting efficiency by:
+
+- Reducing manual invoice entry by approximately 80%
+- Preventing duplicate bill creation
+- Improving invoice processing consistency
+- Automatically resolving vendor records
+- Providing complete workflow auditability
+- Measuring AI performance using benchmark datasets
+
 ## 📁 Project Structure
 
 ```text

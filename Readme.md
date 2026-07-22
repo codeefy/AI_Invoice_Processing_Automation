@@ -90,6 +90,8 @@ The result is a production-style automation pipeline that significantly reduces 
 ---
 
 ## 🏗 System Architecture
+```mermaid
+
 
 flowchart TD
     A([📧 Gmail Trigger<br/>Receive Invoice Email]) --> B[Convert PDF Attachment<br/>to Base64]

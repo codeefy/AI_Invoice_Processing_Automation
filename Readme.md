@@ -36,18 +36,14 @@ Every invoice email is read, parsed by AI, validated against financial rules, ch
 
 </div>
 
----
-
-/div>
----
- 
+--- 
 ## ❗ Problem Statement
  
 Organizations receive hundreds of invoices from different vendors every day. Since each vendor follows a different invoice format, accounting teams often spend significant time manually reviewing invoices, extracting information, verifying totals, checking for duplicate entries, creating vendor records, and entering bills into ERP systems.
  
 This manual process introduces several challenges:
  
-- Time-consuming invoice processing
+ - Time-consuming invoice processing
 - Human data-entry errors
 - Duplicate invoice creation
 - Inconsistent vendor records

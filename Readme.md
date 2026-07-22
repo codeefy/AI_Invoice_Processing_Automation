@@ -53,7 +53,7 @@ Every invoice email is read, parsed by AI, validated against financial rules, ch
 
 ## 📊 Impact / Benchmark Highlights
 
-<div align="center">
+<div align="left">
 
 | Metric | Result |
 |:---|:---:|
@@ -134,15 +134,10 @@ flowchart TD
     class F,K,R,U,X log;
 ```
 
-### 🖼 n8n Workflow Screenshot
+### 🖼 n8n Workflow
 
-Drop your exported canvas screenshot into `docs/screenshots/` and embed it right below the Mermaid diagram so the README shows both the *logical* flow above and the *actual n8n canvas* here:
+![n8n Workflow Overview](docs/Image/n8n_workflow.png)
 
-```markdown
-![n8n Workflow Overview](docs/screenshots/n8n_workflow_overview.png)
-```
-
----
 
 ## 🔄 n8n Workflow — Step by Step
 

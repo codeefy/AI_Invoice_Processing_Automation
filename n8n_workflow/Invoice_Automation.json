@@ -1,1 +1,2147 @@
-
+{
+  "name": "Invoice Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.zohoapis.in/books/v3/bills?organization_id=60077965750",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2048,
+        144
+      ],
+      "id": "5b7071f9-b84c-4de9-a8f5-c3e38f622209",
+      "name": "Create Bill for Clarity",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "V6XLb7s0bY7QKwpi",
+          "name": "Zoho credential"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.zohoapis.in/books/v3/contacts?organization_id=60077965750&contact_name={{ $('Validation Invoice Data').item.json.data.vendor_name }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        224
+      ],
+      "id": "85fbb284-634b-4e03-b83c-1cc788a9257a",
+      "name": "HTTP Request Vendor Check",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "V6XLb7s0bY7QKwpi",
+          "name": "Zoho credential"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "has:attachment filename:pdf"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "8e6d205f-c8d5-423b-9d05-9f0c85bbb917",
+      "name": "Gmail Trigger(Receive Invoice Email)",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xleDrO2KDt1x3kZB",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const binaryData = await this.helpers.getBinaryDataBuffer(0, 'attachment_0');\nconst base64 = binaryData.toString('base64');\n\nreturn [\n  {\n    json: {\n      ...items[0].json,\n      base64Pdf: base64,\n      base64Length: base64.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        0
+      ],
+      "id": "64f076d0-ac88-4cb3-9f4b-5ede5b80390e",
+      "name": "convert PDF Attachment to Base64"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=AQ.Ab8RN6LO-1hVkPRqc9BjdQoYgPj50BrLXivayds47aax9_t-qw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Extract exactly ONE invoice from this PDF and return ONLY one valid JSON object.\\n\\nIMPORTANT DOCUMENT RULES:\\n1. Process only one invoice document.\\n2. If the PDF contains multiple invoices, extract ONLY the first invoice.\\n3. Never combine information from multiple invoices.\\n4. Return exactly ONE JSON object.\\n5. Never return a JSON array.\\n6. Never use markdown code fences.\\n7. Never include explanations.\\n8. Response must start with { and end with }.\\n\\nReturn EXACTLY this JSON schema:\\n\\n{\\n  \\\"vendor_name\\\":\\\"\\\",\\n  \\\"invoice_number\\\":\\\"\\\",\\n  \\\"invoice_date\\\":\\\"\\\",\\n  \\\"due_date\\\":null,\\n  \\\"subtotal\\\":0,\\n  \\\"tax\\\":0,\\n  \\\"shipping\\\":0,\\n  \\\"discount\\\":0,\\n  \\\"total_amount\\\":0,\\n  \\\"currency\\\":\\\"\\\",\\n  \\\"line_items\\\":[\\n    {\\n      \\\"description\\\":\\\"\\\",\\n      \\\"quantity\\\":1,\\n      \\\"unit_price\\\":0,\\n      \\\"line_total\\\":0\\n    }\\n  ]\\n}\\n\\nFIELD RULES:\\n\\nvendor_name:\\nLegal seller or supplier name.\\n\\ninvoice_number:\\nInvoice number only. Never use Order ID.\\n\\ninvoice_date:\\nReturn YYYY-MM-DD.\\n\\ndue_date:\\nReturn YYYY-MM-DD if available, otherwise null.\\n\\nsubtotal:\\nSubtotal before tax. If not explicitly shown, calculate it from the invoice if possible, otherwise return 0.\\n\\ntax:\\nTotal GST/VAT/Sales Tax shown on the invoice. If absent return 0.\\n\\nshipping:\\nShipping, delivery or freight charges. If absent return 0.\\n\\ndiscount:\\nInvoice-level discount. If absent return 0.\\n\\ntotal_amount:\\nFinal payable amount shown on the invoice.\\n\\ncurrency:\\nReturn ISO currency code only.\\nExamples:\\n₹ -> INR\\n$ -> USD\\n€ -> EUR\\n£ -> GBP\\n\\nLINE ITEM RULES:\\n\\nquantity:\\nPurchased quantity.\\n\\nunit_price:\\nPrice per unit before multiplying by quantity.\\n\\nline_total:\\nFinal monetary contribution of that row after line-level discounts.\\nDo NOT use MRP, List Price, Gross Price or Taxable Value unless it is the final line amount.\\nIf a product becomes free after discount, line_total must be 0.\\n\\nFINANCIAL VALIDATION RULES:\\n\\nWhenever possible:\\nsubtotal ≈ sum(line_items.line_total)\\n\\ntotal_amount ≈ subtotal + tax + shipping - discount\\n\\nUse values exactly as printed on the invoice.\\nNever invent values.\\n\\nIf any text field cannot be determined, return null.\\nIf any numeric field cannot be determined, return 0.\\nReturn ONLY valid JSON.\"\n        },\n        {\n          \"inlineData\": {\n            \"mimeType\": \"application/pdf\",\n            \"data\": \"{{$json.base64Pdf}}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"temperature\": 0,\n    \"topP\": 0.95,\n    \"topK\": 40\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        400,
+        0
+      ],
+      "id": "3c876645-626f-45b5-ace2-862e0f6ba531",
+      "name": "Gemini AI",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.zohoapis.in/books/v3/bills?organization_id=60077965750&reference_number={{$json.data.invoice_number}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1312,
+        -16
+      ],
+      "id": "b1943eb5-6a85-4393-b250-e245dc0e17cf",
+      "name": "HTTP Request(get Zoho Books organizations)",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "V6XLb7s0bY7QKwpi",
+          "name": "Zoho credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7c9a7031-4459-480d-8e44-4b77c682501e",
+              "leftValue": "={{ $json.contacts.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        192
+      ],
+      "id": "cf5dab3c-84be-4f22-9e3d-6ab3414e06e6",
+      "name": "If(Does vendor exist?)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\n\n// ----------------------------------------\n// 1. READ GEMINI RESPONSE SAFELY\n// ----------------------------------------\n\nconst raw =\n  response?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nif (!raw || typeof raw !== 'string') {\n  return [{\n    json: {\n      status: 'invalid',\n      reason: 'Missing or empty Gemini response'\n    }\n  }];\n}\n\n\n// ----------------------------------------\n// 2. CLEAN POSSIBLE MARKDOWN FENCES\n// ----------------------------------------\n\nconst cleaned = raw\n  .replace(/```json/gi, '')\n  .replace(/```/g, '')\n  .trim();\n\n\n// ----------------------------------------\n// 3. PARSE JSON\n// ----------------------------------------\n\nlet data;\n\ntry {\n  data = JSON.parse(cleaned);\n} catch (error) {\n  return [{\n    json: {\n      status: 'invalid',\n      reason: 'JSON parse failed',\n      raw\n    }\n  }];\n}\n\n\n// ----------------------------------------\n// 4. REQUIRED FIELD VALIDATION\n// ----------------------------------------\n\nconst requiredFields = [\n  'vendor_name',\n  'invoice_number',\n  'invoice_date',\n  'total_amount',\n  'currency'\n];\n\nconst missingFields = requiredFields.filter(field =>\n  data[field] === null ||\n  data[field] === undefined ||\n  data[field] === ''\n);\n\nif (missingFields.length > 0) {\n  return [{\n    json: {\n      status: 'invalid',\n      reason:\n        `Missing required fields: ${missingFields.join(', ')}`,\n      data\n    }\n  }];\n}\n\n\n// ----------------------------------------\n// 5. TOTAL AMOUNT VALIDATION\n// ----------------------------------------\n\nconst invoiceTotal = Number(data.total_amount);\n\nif (\n  !Number.isFinite(invoiceTotal) ||\n  invoiceTotal <= 0\n) {\n  return [{\n    json: {\n      status: 'invalid',\n      reason:\n        `Invalid total amount: ${data.total_amount}`,\n      data\n    }\n  }];\n}\n\n\n// ----------------------------------------\n// 6. LINE ITEMS MUST EXIST\n// ----------------------------------------\n\nif (\n  !Array.isArray(data.line_items) ||\n  data.line_items.length === 0\n) {\n  return [{\n    json: {\n      status: 'invalid',\n      reason: 'No line items found',\n      data\n    }\n  }];\n}\n\n\n// ----------------------------------------\n// 7. VALIDATE EACH LINE ITEM\n// ----------------------------------------\n\nfor (\n  let i = 0;\n  i < data.line_items.length;\n  i++\n) {\n\n  const item = data.line_items[i];\n\n  if (\n    !item.description ||\n    typeof item.description !== 'string'\n  ) {\n    return [{\n      json: {\n        status: 'invalid',\n        reason:\n          `Line item ${i + 1}: missing description`,\n        data\n      }\n    }];\n  }\n\n  const lineTotal = Number(\n    item.line_total ?? item.amount\n  );\n\n  if (\n    !Number.isFinite(lineTotal) ||\n    lineTotal < 0\n  ) {\n    return [{\n      json: {\n        status: 'invalid',\n        reason:\n          `Line item ${i + 1}: invalid line_total`,\n        data\n      }\n    }];\n  }\n}\n\n\n// ----------------------------------------\n// 8. CALCULATE LINE ITEMS TOTAL\n// ----------------------------------------\n\nconst lineItemsTotal =\n  data.line_items.reduce(\n    (sum, item) =>\n      sum +\n      Number(\n        item.line_total ??\n        item.amount\n      ),\n    0\n  );\n\n\n// ----------------------------------------\n// 9. READ FINANCIAL FIELDS SAFELY\n// ----------------------------------------\n\nconst subtotal = Number(\n  data.subtotal ?? lineItemsTotal\n);\n\nconst possibleTaxValues = [\n  data.tax,\n  data.tax_amount,\n  data.total_tax,\n  data.vat,\n  data.vat_amount\n];\n\nlet taxAmount = 0;\n\nfor (const value of possibleTaxValues) {\n\n  const numericValue = Number(value);\n\n  if (\n    value !== null &&\n    value !== undefined &&\n    value !== '' &&\n    Number.isFinite(numericValue)\n  ) {\n    taxAmount = numericValue;\n    break;\n  }\n}\n\nconst shipping = Number(\n  data.shipping ??\n  data.shipping_amount ??\n  0\n);\n\nconst discount = Number(\n  data.discount ??\n  data.discount_amount ??\n  0\n);\n\n\n// ----------------------------------------\n// 10. FINANCIAL RECONCILIATION\n// ----------------------------------------\n\nconst subtotalDifference = Math.abs(\n  lineItemsTotal - subtotal\n);\n\nconst expectedTotal =\n  subtotal +\n  taxAmount +\n  shipping -\n  discount;\n\nconst expectedDifference = Math.abs(\n  expectedTotal - invoiceTotal);\n\nconst directDifference = Math.abs(\n  lineItemsTotal - invoiceTotal\n);\n\nconst TOLERANCE = 1;\n\nlet reconciliationMethod = null;\nlet finalDifference = null;\n\n\n// CASE 1\n// Line items == Invoice total\n\nif (directDifference <= TOLERANCE) {\n\n  reconciliationMethod =\n    \"LINE_ITEMS_EQUAL_TOTAL\";\n\n  finalDifference =\n    directDifference;\n}\n\n\n// CASE 2\n// Subtotal + Tax + Shipping - Discount == Invoice Total\n\nelse if (expectedDifference <= TOLERANCE) {\n\n  reconciliationMethod =\n    \"FULL_FINANCIAL_RECONCILIATION\";\n\n  finalDifference =\n    expectedDifference;\n}\n\n\n// CASE 3\n// Invalid financial data\n\nelse {\n\n  return [{\n    json: {\n\n      status: \"invalid\",\n\n      reason:\n        `Financial reconciliation failed. ` +\n        `Expected ${expectedTotal.toFixed(2)} ` +\n        `vs Invoice ${invoiceTotal.toFixed(2)}`,\n\n      reconciliation: {\n\n        line_items_total:\n          Number(lineItemsTotal.toFixed(2)),\n\n        subtotal:\n          Number(subtotal.toFixed(2)),\n\n        subtotal_difference:\n          Number(subtotalDifference.toFixed(2)),\n\n        tax:\n          Number(taxAmount.toFixed(2)),\n\n        shipping:\n          Number(shipping.toFixed(2)),\n\n        discount:\n          Number(discount.toFixed(2)),\n\n        expected_total:\n          Number(expectedTotal.toFixed(2)),\n\n        invoice_total:\n          Number(invoiceTotal.toFixed(2)),\n\n        difference:\n          Number(expectedDifference.toFixed(2))\n      },\n\n      data\n    }\n  }];\n}\n\n\n// ----------------------------------------\n// 11. VALID RESULT\n// ----------------------------------------\n\nreturn [{\n  json: {\n\n    status: \"valid\",\n\n    reconciliation: {\n\n      method:\n        reconciliationMethod,\n\n      line_items_total:\n        Number(lineItemsTotal.toFixed(2)),\n\n      subtotal:\n        Number(subtotal.toFixed(2)),\n\n      subtotal_difference:\n        Number(subtotalDifference.toFixed(2)),\n\n      tax:\n        Number(taxAmount.toFixed(2)),\n\n      shipping:\n        Number(shipping.toFixed(2)),\n\n      discount:\n        Number(discount.toFixed(2)),\n\n      expected_total:\n        Number(expectedTotal.toFixed(2)),\n\n      invoice_total:\n        Number(invoiceTotal.toFixed(2)),\n\n      difference:\n        Number(finalDifference.toFixed(2))\n    },\n\n    data\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        -16
+      ],
+      "id": "3159a87d-fa7b-4470-8691-0798389947f0",
+      "name": "Validation Invoice Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "14fda020-6520-4182-8b00-fc5c955a48da",
+              "leftValue": "={{ $json.bills.length }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        224
+      ],
+      "id": "625ee8bd-085d-47e5-a902-fafa259cefd3",
+      "name": "If Duplicate exist?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb39d649-80ab-4685-aa80-99c3eaee5e4d",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        944,
+        0
+      ],
+      "id": "4cef1cc7-bd3d-4285-b105-42c635b297f4",
+      "name": "is Invoice valid ?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "vendor_name": "={{ $json.data.vendor_name }}",
+            "invoice_number": "={{ $json.data.invoice_number }}",
+            "extraction_status": "valid_extraction",
+            "final_status": "VALIDATION_FAILED",
+            "error_reason": "= {{ $json.reason }}",
+            "invoice_date": "={{ $json.data.invoice_date }}",
+            "total_amount": "={{ $json.data.total_amount }}",
+            "currency": "={{ $json.data.currency }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "e3052566-c97c-4421-a3a2-43a45bdab5e1",
+      "name": "Append Row",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "vendor_name": "={{ $('Validation Invoice Data').item.json.data.vendor_name }}",
+            "invoice_number": "={{ $('Validation Invoice Data').item.json.data.invoice_number }}",
+            "invoice_date": "={{ $('Validation Invoice Data').item.json.data.invoice_date }}",
+            "total_amount": "={{ $('Validation Invoice Data').item.json.data.total_amount }}",
+            "currency": "={{ $('Validation Invoice Data').item.json.data.currency }}",
+            "extraction_status": "valid_extraction",
+            "duplicate_status": "DUPLICATE",
+            "final_status": "DUPLICATE_SKIPPED"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        384,
+        320
+      ],
+      "id": "75debb7b-c4e8-4231-9122-9c7b01a95c03",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "vendor_name": "={{ $('Validation Invoice Data').item.json.data.vendor_name }}",
+            "invoice_number": "={{ $('Validation Invoice Data').item.json.data.invoice_number }}",
+            "invoice_date": "={{ $('Validation Invoice Data').item.json.data.invoice_date }}",
+            "total_amount": "={{ $('Validation Invoice Data').item.json.data.total_amount }}",
+            "currency": "={{ $('Validation Invoice Data').item.json.data.currency }}",
+            "extraction_status": "valid_extraction",
+            "duplicate_status": "NOT_DUPLICATE",
+            "vendor_status": "resolved",
+            "zoho_bill_id": "={{ $json.bill.bill_id }}",
+            "final_status": "SUCCESS"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2240,
+        0
+      ],
+      "id": "18617d79-dbc3-4182-82d0-f6e838ae25e5",
+      "name": "Append row in sheet1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://www.zohoapis.in/books/v3/bills?organization_id=60077965750&bill_number={{ $('Validation Invoice Data').item.json.data.invoice_number }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -96,
+        224
+      ],
+      "id": "39bc4aa4-40a5-481a-a0ec-39d37fffe478",
+      "name": "Duplicate check search bills",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "V6XLb7s0bY7QKwpi",
+          "name": "Zoho credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "vendor_name": "={{ $('Validation Invoice Data').first().json.data.vendor_name }}",
+            "invoice_number": "={{ $('Validation Invoice Data').first().json.data.invoice_number }}",
+            "invoice_date": "={{ $('Validation Invoice Data').first().json.data.invoice_date }}",
+            "total_amount": "={{ $('Validation Invoice Data').first().json.data.total_amount }}",
+            "currency": "={{ $('Validation Invoice Data').first().json.data.currency }}",
+            "extraction_status": "valid_extraction",
+            "duplicate_status": "NOT_DUPLICATE",
+            "vendor_status": "resolved",
+            "final_status": "ZOHO_BILL_CREATION_FAILED",
+            "error_reason": "Zoho Books bill creation failed after 3 retry attempts"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2288,
+        288
+      ],
+      "id": "dcd2973a-cde5-4be7-bff1-afcc906fd9e4",
+      "name": "Log Zoho Bill Creation Failure",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "vendor_name": "=",
+            "invoice_number": "=",
+            "invoice_date": "=",
+            "total_amount": "=",
+            "currency": "=",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "extraction_status": "API_FAILED",
+            "final_status": "PROCESSING_FAILED",
+            "error_reason": "Gemini API request failed after 3 retry attempts"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        64
+      ],
+      "id": "c1ecfdf8-ece6-4759-a7ce-4a10382e94f0",
+      "name": "APi Checked",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// --------------------------------------------------\n// 1. GET VALIDATED INVOICE DATA\n// --------------------------------------------------\n\nconst validation =\n  $('Validation Invoice Data').first().json;\n\nconst data = validation.data;\n\nif (!data) {\n  return [{\n    json: {\n      status: 'invalid',\n      reason: 'Validated invoice data not found'\n    }\n  }];\n}\n\n\n// --------------------------------------------------\n// 2. RESOLVE VENDOR ID\n// Supports both:\n// - existing vendor\n// - newly created vendor\n// --------------------------------------------------\n\nconst current = $input.first().json;\n\nconst vendorId =\n  current.contact_id ||\n  current.contact?.contact_id;\n\nif (!vendorId) {\n  return [{\n    json: {\n      status: 'invalid',\n      reason: 'Zoho vendor ID not found'\n    }\n  }];\n}\n\n\n// --------------------------------------------------\n// 3. BUILD ZOHO LINE ITEMS\n// --------------------------------------------------\n\nconst zohoLineItems = data.line_items.map((item, index) => {\n\n  const finalLineTotal = Number(\n    item.line_total ?? item.amount\n  );\n\n  return {\n    name: (\n      item.description ||\n      `Invoice Item ${index + 1}`\n    ).slice(0, 190),\n\n    rate: Number(finalLineTotal.toFixed(2)),\n\n    quantity: 1,\n\n    account_id: '3969563000000000549'\n  };\n});\n\n\n// --------------------------------------------------\n// 4. BUILD THE EXACT ZOHO PAYLOAD\n// --------------------------------------------------\n\nconst payload = {\n  vendor_id: String(vendorId),\n\n  bill_number: String(data.invoice_number),\n\n  date: String(data.invoice_date),\n\n  line_items: zohoLineItems\n};\n\n\n// --------------------------------------------------\n// 5. CALCULATE EXACT AMOUNT ZOHO WILL CREATE\n// --------------------------------------------------\n\nconst zohoPayloadTotal = payload.line_items.reduce(\n  (sum, item) =>\n    sum + (Number(item.rate) * Number(item.quantity)),\n  0\n);\n\nconst invoiceTotal = Number(data.total_amount);\n\nconst difference = Math.abs(\n  zohoPayloadTotal - invoiceTotal\n);\n\nconst TOLERANCE = 1;\n\n\n// --------------------------------------------------\n// 6. BLOCK UNSAFE PAYLOAD\n// --------------------------------------------------\n\nif (difference > TOLERANCE) {\n  return [{\n    json: {\n      status: 'invalid',\n\n      reason:\n        `Zoho payload reconciliation failed: ` +\n        `payload total ${zohoPayloadTotal.toFixed(2)} ` +\n        `vs invoice total ${invoiceTotal.toFixed(2)}`,\n\n      reconciliation: {\n        zoho_payload_total:\n          Number(zohoPayloadTotal.toFixed(2)),\n\n        invoice_total:\n          Number(invoiceTotal.toFixed(2)),\n\n        difference:\n          Number(difference.toFixed(2))\n      },\n\n      payload\n    }\n  }];\n}\n\n\n// --------------------------------------------------\n// 7. SAFE PAYLOAD\n// --------------------------------------------------\n\nreturn [{\n  json: {\n    status: 'valid',\n\n    reconciliation: {\n      zoho_payload_total:\n        Number(zohoPayloadTotal.toFixed(2)),\n\n      invoice_total:\n        Number(invoiceTotal.toFixed(2)),\n\n      difference:\n        Number(difference.toFixed(2))\n    },\n\n    payload\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        192
+      ],
+      "id": "b1854192-19aa-408c-8545-8b9d73ed9592",
+      "name": "Build & Verify Zoho Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.zohoapis.in/books/v3/contacts?organization_id=60077965750",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contact_name\": \"{{ $('Validation Invoice Data').item.json.data.vendor_name }}\",\n  \"contact_type\": \"vendor\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        192
+      ],
+      "id": "c4a7aa5c-c5a2-4c4d-a860-f229f26948bd",
+      "name": "Get Existing Vendor Details",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "V6XLb7s0bY7QKwpi",
+          "name": "Zoho credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Validation Invoice Data').first().json.data;\n\nreturn [{\n  json: {\n    contact_name: data.vendor_name,\n    company_name: data.vendor_name,\n    contact_type: 'vendor'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        400
+      ],
+      "id": "8604d9ba-de89-4aed-b245-109ad1950e13",
+      "name": "Prepare New Vendor Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5fdc54a7-91e9-4e2b-a782-bb89b1b12644",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1776,
+        160
+      ],
+      "id": "5b2835c8-b2ec-43d7-9a4d-958e0b8935a7",
+      "name": "Is Zoho Payload Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "vendor_name": "={{ $('Validation Invoice Data').item.json.data.vendor_name }}",
+            "invoice_number": "={{ $('Validation Invoice Data').item.json.data.invoice_number }}",
+            "invoice_date": "={{ $('Validation Invoice Data').item.json.data.invoice_date }}",
+            "total_amount": "={{ $('Validation Invoice Data').item.json.data.total_amount }}",
+            "currency": "={{ $('Validation Invoice Data').item.json.data.currency }}",
+            "extraction_status": "valid_extraction",
+            "duplicate_status": "NOT_DUPLICATE",
+            "vendor_status": "resolved",
+            "final_status": "PAYLOAD_VALIDATION_FAILED",
+            "error_reason": "={{ $json.reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1936,
+        352
+      ],
+      "id": "1dd85cce-da7d-460b-ab3e-90ee1037ef0a",
+      "name": "Log Payload Validation Failure",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "vendor_name": "={{ $('Validation Invoice Data').first().json.data.vendor_name }}",
+            "invoice_number": "={{ $('Validation Invoice Data').first().json.data.invoice_number }}",
+            "invoice_date": "={{ $('Validation Invoice Data').first().json.data.invoice_date }}",
+            "total_amount": "={{ $('Validation Invoice Data').first().json.data.total_amount }}",
+            "currency": "={{ $('Validation Invoice Data').first().json.data.currency }}",
+            "extraction_status": "valid_extraction",
+            "duplicate_status": "NOT_DUPLICATE",
+            "vendor_status": "VENDOR_CHECK_FAILED",
+            "final_status": "VENDOR_CHECK_FAILED",
+            "error_reason": "={{ $json.error?.message || $json.message || 'Zoho vendor check API failed' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        832,
+        384
+      ],
+      "id": "d61f8a4a-644c-48f0-84e7-cb2f010e21ac",
+      "name": "Log Vendor Check Failure",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.zohoapis.in/books/v3/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "{\n  \"organization_id\": \"60077965750\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contact_name\": \"{{ $('Validation Invoice Data').first().json.data.vendor_name }}\",\n  \"company_name\": \"{{ $('Validation Invoice Data').first().json.data.vendor_name }}\",\n  \"contact_type\": \"vendor\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        400
+      ],
+      "id": "41722e5b-8291-45d3-8af5-a1c9fec8dbbc",
+      "name": "Create New Vendor in Zoho",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "V6XLb7s0bY7QKwpi",
+          "name": "Zoho credential"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4",
+          "mode": "list",
+          "cachedResultName": "Invoice Automation Audit Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HOU4_5pq4BSZaTnZ8Tr_pCWDeoNauQTLJ04rO2ZCZw4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "processed_at": "={{ $now }}",
+            "email_id": "={{ $('Gmail Trigger(Receive Invoice Email)').item.json.id }}",
+            "file_name": "={{ $('Gmail Trigger(Receive Invoice Email)').item.binary.attachment_0.fileName }}",
+            "vendor_name": "={{ $('Validation Invoice Data').first().json.data.vendor_name }}",
+            "invoice_number": "={{ $('Validation Invoice Data').first().json.data.invoice_number }}",
+            "invoice_date": "={{ $('Validation Invoice Data').first().json.data.invoice_date }}",
+            "total_amount": "={{ $('Validation Invoice Data').first().json.data.total_amount }}",
+            "currency": "={{ $('Validation Invoice Data').first().json.data.currency }}",
+            "extraction_status": "valid_extraction",
+            "duplicate_status": "NOT_DUPLICATE",
+            "vendor_status": "VENDOR_CREATION_FAILED",
+            "final_status": "VENDOR_CREATION_FAILED",
+            "error_reason": "={{ $json.error?.message || $json.message || 'Zoho vendor creation API failed after 3 retry attempts' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "file_name",
+              "displayName": "file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_name",
+              "displayName": "vendor_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_date",
+              "displayName": "invoice_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extraction_status",
+              "displayName": "extraction_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "duplicate_status",
+              "displayName": "duplicate_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "vendor_status",
+              "displayName": "vendor_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "zoho_bill_id",
+              "displayName": "zoho_bill_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_status",
+              "displayName": "final_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_reason",
+              "displayName": "error_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1504,
+        496
+      ],
+      "id": "3a7e5055-5496-41bb-9c35-2153394c199a",
+      "name": "Log Vendor Creation Failure",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QkuhTIeBwCQ4Hmf6",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Create Bill for Clarity": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Zoho Bill Creation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request Vendor Check": {
+      "main": [
+        [
+          {
+            "node": "If(Does vendor exist?)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Vendor Check Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger(Receive Invoice Email)": {
+      "main": [
+        [
+          {
+            "node": "convert PDF Attachment to Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "convert PDF Attachment to Base64": {
+      "main": [
+        [
+          {
+            "node": "Gemini AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini AI": {
+      "main": [
+        [
+          {
+            "node": "Validation Invoice Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "APi Checked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request(get Zoho Books organizations)": {
+      "main": [
+        [
+          {
+            "node": "Duplicate check search bills",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If(Does vendor exist?)": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Vendor Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare New Vendor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Invoice Data": {
+      "main": [
+        [
+          {
+            "node": "is Invoice valid ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Duplicate exist?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request Vendor Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "is Invoice valid ?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request(get Zoho Books organizations)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Duplicate check search bills": {
+      "main": [
+        [
+          {
+            "node": "If Duplicate exist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [],
+        []
+      ]
+    },
+    "APi Checked": {
+      "main": [
+        []
+      ]
+    },
+    "Build & Verify Zoho Payload": {
+      "main": [
+        [
+          {
+            "node": "Is Zoho Payload Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Vendor Details": {
+      "main": [
+        [
+          {
+            "node": "Build & Verify Zoho Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare New Vendor Data": {
+      "main": [
+        [
+          {
+            "node": "Create New Vendor in Zoho",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Zoho Payload Valid?": {
+      "main": [
+        [
+          {
+            "node": "Create Bill for Clarity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Payload Validation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Vendor in Zoho": {
+      "main": [
+        [
+          {
+            "node": "Build & Verify Zoho Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Vendor Creation Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "562309d9-a4e4-4b00-acee-b7a4f70ba759",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "eb5106060d6002623f5eb5c14feac53adee5349bb1a04a17a5f2b8fb50e52e17"
+  },
+  "nodeGroups": [],
+  "id": "4eSjo29S9U13RQPI",
+  "tags": []
+}

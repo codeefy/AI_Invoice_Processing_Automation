@@ -134,9 +134,11 @@ flowchart TD
     class F,K,R,U,X log;
 ```
 
-### 🖼 n8n Workflow
-
+### 🖼 n8n Workflow: Here's the actual n8n canvas, showing every node and branch exactly as built:
+ 
 ![n8n Workflow Overview](Doc/n8nworkflow.png)
+ 
+---
 
 ## 🔄 n8n Workflow — Step by Step
 

@@ -136,8 +136,7 @@ flowchart TD
 
 ### 🖼 n8n Workflow
 
-![n8n Workflow Overview](docs/Image/n8n_workflow.png)
-
+![n8n Workflow Overview](docs/n8n_workflow.png)
 
 ## 🔄 n8n Workflow — Step by Step
 
